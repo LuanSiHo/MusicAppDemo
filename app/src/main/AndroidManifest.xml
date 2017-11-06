@@ -21,6 +21,15 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <service android:name=".PlaySongService">
+
+        </service>
+        <receiver android:name=".MyBroadcast">
+            <intent-filter>
+                <action android:name="android.net.conn.CONNECTIVITY_CHANGE"/>
+                <action android:name="com.luan.MY_CUSTOM_BROADCAST"/>
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
