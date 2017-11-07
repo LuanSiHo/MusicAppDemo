@@ -39,4 +39,9 @@
         android:id="@+id/btn_send_broadcast"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"/>
+    <Button
+        android:id="@+id/btn_count_down"
+        android:text="count down timer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
 </LinearLayout>

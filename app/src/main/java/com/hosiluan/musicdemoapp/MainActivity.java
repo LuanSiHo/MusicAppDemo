@@ -1,10 +1,16 @@
 package com.hosiluan.musicdemoapp;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.media.MediaPlayer;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.AsyncTask;
+import android.os.CountDownTimer;
 import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
@@ -30,21 +36,23 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 
-public class MainActivity extends AppCompatActivity implements ReyclerViewMusicAdapter.MusicAdapterListener {
-
+public class MainActivity extends BaseActivity
+        implements ReyclerViewMusicAdapter.MusicAdapterListener,
+        BaseActivity.DownloadMusicListener {
     public static final String PATH = "music path";
     private final int REQUEST_PERMISSION = 1;
-    private Button mDownloadMusicButton, mStopMusicButton, mSendBroadcastButton;
+    private Button mDownloadMusicButton, mStopMusicButton, mSendBroadcastButton, mCountDownButton;
     private ArrayList<String> mMusicList;
     private ReyclerViewMusicAdapter mMusicAdapter;
     private RecyclerView mMusicecyclerView;
     private EditText mMusicLinkEditText;
 
-    private int mSongNumber = 1;
     private MediaPlayer mediaPlayer;
 
     private ProgressBar progressBar;
     private AlertDialog alertDialog;
+
+    public static boolean isProblemWhenDownloading = false;
 
 
     @Override
@@ -58,14 +66,26 @@ public class MainActivity extends AppCompatActivity implements ReyclerViewMusicA
         checkAndRequestPermission();
         isExternalStorageReadable();
         getAllMp3File();
+    }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        setListener(this);
     }
 
     private void setEvent() {
         mDownloadMusicButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                new DownloadMusic().execute(mMusicLinkEditText.getText().toString().trim());
+                if (isNetworkAvailable()) {
+                    Log.d("Luan", "downloading");
+                    new DownloadMusic().execute(mMusicLinkEditText.getText().toString().trim());
+                    isProblemWhenDownloading = false;
+                } else {
+                    isProblemWhenDownloading = true;
+                }
+
                 getAllMp3File();
             }
         });
@@ -87,9 +107,33 @@ public class MainActivity extends AppCompatActivity implements ReyclerViewMusicA
                 sendBroadcast(intent);
             }
         });
+
+
+        mCountDownButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+
+                CountDownTimer countDownTimer = new CountDownTimer(10000, 1000) {
+                    @Override
+                    public void onTick(long l) {
+                        Log.d("Luan", "tick");
+                    }
+
+                    @Override
+                    public void onFinish() {
+                        Log.d("Luan", "finish");
+
+                        sendBroadcast("com.luan.PLAY_MUSIC");
+                    }
+                };
+
+                countDownTimer.start();
+            }
+        });
     }
 
     private void setView() {
+
 
         progressBar = findViewById(R.id.progressbar);
 
@@ -99,6 +143,7 @@ public class MainActivity extends AppCompatActivity implements ReyclerViewMusicA
         mDownloadMusicButton = findViewById(R.id.btn_download_music);
         mStopMusicButton = findViewById(R.id.btn_stop_music);
         mSendBroadcastButton = findViewById(R.id.btn_send_broadcast);
+        mCountDownButton = findViewById(R.id.btn_count_down);
 
         mMusicList = new ArrayList<>();
         mMusicecyclerView = findViewById(R.id.recyclerview_music);
@@ -107,34 +152,31 @@ public class MainActivity extends AppCompatActivity implements ReyclerViewMusicA
         mMusicecyclerView.setAdapter(mMusicAdapter);
         mMusicecyclerView.setLayoutManager(new LinearLayoutManager(getApplicationContext(),
                 LinearLayoutManager.VERTICAL, false));
-
     }
 
-
-    private void playMusic(String songname) {
-
-        String path = Environment.getExternalStorageDirectory() + "/" + songname;
-        Log.d("Luan", "playMusic " + path);
-
-        Intent intent = new Intent(MainActivity.this, PlaySongService.class);
-        intent.putExtra(PATH, path);
-        this.startService(intent);
-
+//    private void playMusic(String songname) {
 //
-//        if (mediaPlayer.isPlaying()) {
-//            mediaPlayer.stop();
-//        }
-//        try {
-////            mediaPlayer = MediaPlayer.create(getApplicationContext(), Uri.parse(path));
-//            mediaPlayer = new MediaPlayer();
-//            mediaPlayer.setDataSource(path);
-//            mediaPlayer.prepare();
-//            mediaPlayer.start();
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-    }
-
+//        String path = Environment.getExternalStorageDirectory() + "/" + songname;
+//        Log.d("Luan", "playMusic " + path);
+//
+//        Intent intent = new Intent(MainActivity.this, PlaySongService.class);
+//        intent.putExtra(PATH, path);
+//        this.startService(intent);
+//
+////
+////        if (mediaPlayer.isPlaying()) {
+////            mediaPlayer.stop();
+////        }
+////        try {
+//////            mediaPlayer = MediaPlayer.create(getApplicationContext(), Uri.parse(path));
+////            mediaPlayer = new MediaPlayer();
+////            mediaPlayer.setDataSource(path);
+////            mediaPlayer.prepare();
+////            mediaPlayer.start();
+////        } catch (IOException e) {
+////            e.printStackTrace();
+////        }
+//    }
 
     private void getAllMp3File() {
         String mp3Path = "";
@@ -183,6 +225,13 @@ public class MainActivity extends AppCompatActivity implements ReyclerViewMusicA
 
     }
 
+    public boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager
+                = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
+        return ((networkInfo != null) && (networkInfo.isConnected()));
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                            @NonNull int[] grantResults) {
@@ -211,12 +260,23 @@ public class MainActivity extends AppCompatActivity implements ReyclerViewMusicA
         playMusic(mMusicList.get(position));
     }
 
-    class DownloadMusic extends AsyncTask<String, Integer, Void> {
+    @Override
+    public void retryDownload() {
+        if (isProblemWhenDownloading) {
+            Log.d("Luan", "download again");
 
+            new DownloadMusic().execute(mMusicLinkEditText.getText().toString().trim());
+        } else {
+            Log.d("Luan", "do not download again");
+        }
+    }
+
+    class DownloadMusic extends AsyncTask<String, Integer, Void> {
         @Override
         protected Void doInBackground(String... strings) {
 
             try {
+                Log.d("Luan", "download music doinbackground");
                 URL url = new URL(strings[0]);
                 HttpURLConnection httpURLConnection = (HttpURLConnection) url.openConnection();
 
@@ -260,8 +320,9 @@ public class MainActivity extends AppCompatActivity implements ReyclerViewMusicA
             Log.d("Luan", "here " + mMusicList.size());
             mMusicAdapter.notifyDataSetChanged();
             alertDialog.dismiss();
-        }
 
+            isProblemWhenDownloading = false;
+        }
 
         @Override
         protected void onPreExecute() {
@@ -274,7 +335,9 @@ public class MainActivity extends AppCompatActivity implements ReyclerViewMusicA
             progressBar = view1.findViewById(R.id.progressbar);
 
             alertDialog = builder.create();
+            alertDialog.setCancelable(false);
             alertDialog.show();
+
         }
 
         @Override
@@ -282,6 +345,13 @@ public class MainActivity extends AppCompatActivity implements ReyclerViewMusicA
             super.onProgressUpdate(values);
             Log.d("Luan", values[0] + " percent");
 
+            if (!isNetworkAvailable()) {
+                Log.d("Luan", "network error");
+//                isProblemWhenDownloading = true;
+                alertDialog.dismiss();
+            } else {
+                Log.d("Luan", "network okay");
+            }
             progressBar.setMax(100);
             progressBar.setProgress(values[0]);
         }
