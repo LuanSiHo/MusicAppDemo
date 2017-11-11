@@ -69,7 +69,8 @@ public class BaseActivity extends AppCompatActivity {
 
     protected void playMusic(String songname) {
 
-        String path = Environment.getExternalStorageDirectory() + "/" + songname;
+        String path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+                + "/" + songname;
         Log.d("Luan", "playMusic " + path);
 
         Intent intent = new Intent(BaseActivity.this, PlaySongService.class);

@@ -36,9 +36,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 
-public class MainActivity extends BaseActivity
-        implements ReyclerViewMusicAdapter.MusicAdapterListener,
-        BaseActivity.DownloadMusicListener {
+public class MainActivity extends BaseActivity implements ReyclerViewMusicAdapter.MusicAdapterListener, BaseActivity.DownloadMusicListener {
     public static final String PATH = "music path";
     private final int REQUEST_PERMISSION = 1;
     private Button mDownloadMusicButton, mStopMusicButton, mSendBroadcastButton, mCountDownButton;
@@ -53,6 +51,8 @@ public class MainActivity extends BaseActivity
     private AlertDialog alertDialog;
 
     public static boolean isProblemWhenDownloading = false;
+
+    DownloadMusic mDownloadMusic = new DownloadMusic();
 
 
     @Override
@@ -71,7 +71,6 @@ public class MainActivity extends BaseActivity
     @Override
     protected void onResume() {
         super.onResume();
-        setListener(this);
     }
 
     private void setEvent() {
@@ -79,13 +78,13 @@ public class MainActivity extends BaseActivity
             @Override
             public void onClick(View view) {
                 if (isNetworkAvailable()) {
-                    Log.d("Luan", "downloading");
-                    new DownloadMusic().execute(mMusicLinkEditText.getText().toString().trim());
-                    isProblemWhenDownloading = false;
-                } else {
-                    isProblemWhenDownloading = true;
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            mDownloadMusic.execute(mMusicLinkEditText.getText().toString().trim());
+                        }
+                    });
                 }
-
                 getAllMp3File();
             }
         });
@@ -116,12 +115,11 @@ public class MainActivity extends BaseActivity
                 CountDownTimer countDownTimer = new CountDownTimer(10000, 1000) {
                     @Override
                     public void onTick(long l) {
-                        Log.d("Luan", "tick");
+
                     }
 
                     @Override
                     public void onFinish() {
-                        Log.d("Luan", "finish");
 
                         sendBroadcast("com.luan.PLAY_MUSIC");
                     }
@@ -147,43 +145,18 @@ public class MainActivity extends BaseActivity
 
         mMusicList = new ArrayList<>();
         mMusicecyclerView = findViewById(R.id.recyclerview_music);
-        mMusicAdapter = new ReyclerViewMusicAdapter(getApplicationContext(), mMusicList,
-                this);
+        mMusicAdapter = new ReyclerViewMusicAdapter(getApplicationContext(), mMusicList, this);
         mMusicecyclerView.setAdapter(mMusicAdapter);
-        mMusicecyclerView.setLayoutManager(new LinearLayoutManager(getApplicationContext(),
-                LinearLayoutManager.VERTICAL, false));
+        mMusicecyclerView.setLayoutManager(new LinearLayoutManager(getApplicationContext(), LinearLayoutManager.VERTICAL, false));
     }
 
-//    private void playMusic(String songname) {
-//
-//        String path = Environment.getExternalStorageDirectory() + "/" + songname;
-//        Log.d("Luan", "playMusic " + path);
-//
-//        Intent intent = new Intent(MainActivity.this, PlaySongService.class);
-//        intent.putExtra(PATH, path);
-//        this.startService(intent);
-//
-////
-////        if (mediaPlayer.isPlaying()) {
-////            mediaPlayer.stop();
-////        }
-////        try {
-//////            mediaPlayer = MediaPlayer.create(getApplicationContext(), Uri.parse(path));
-////            mediaPlayer = new MediaPlayer();
-////            mediaPlayer.setDataSource(path);
-////            mediaPlayer.prepare();
-////            mediaPlayer.start();
-////        } catch (IOException e) {
-////            e.printStackTrace();
-////        }
-//    }
 
     private void getAllMp3File() {
         String mp3Path = "";
         mMusicList.clear();
         Log.d("Luan", "size: " + mMusicList.size());
 
-        String path = Environment.getExternalStorageDirectory() + "/";
+        String path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC) + "/";
         File dir = new File(path);
 
         if (dir.exists()) {
@@ -204,37 +177,30 @@ public class MainActivity extends BaseActivity
     }
 
     private void checkAndRequestPermission() {
-        String[] permissions = new String[]{
-                Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                Manifest.permission.READ_EXTERNAL_STORAGE
-        };
+        String[] permissions = new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE};
 
         ArrayList<String> neededPermissionList = new ArrayList<>();
 
         for (String permission : permissions) {
-            if (ContextCompat.checkSelfPermission(getApplicationContext(), permission)
-                    != PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(getApplicationContext(), permission) != PackageManager.PERMISSION_GRANTED) {
                 neededPermissionList.add(permission);
             }
         }
 
         if (!neededPermissionList.isEmpty()) {
-            ActivityCompat.requestPermissions(MainActivity.this,
-                    neededPermissionList.toArray(new String[neededPermissionList.size()]), REQUEST_PERMISSION);
+            ActivityCompat.requestPermissions(MainActivity.this, neededPermissionList.toArray(new String[neededPermissionList.size()]), REQUEST_PERMISSION);
         }
 
     }
 
     public boolean isNetworkAvailable() {
-        ConnectivityManager connectivityManager
-                = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        ConnectivityManager connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
         return ((networkInfo != null) && (networkInfo.isConnected()));
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         switch (requestCode) {
             case REQUEST_PERMISSION: {
@@ -248,8 +214,7 @@ public class MainActivity extends BaseActivity
 
     private boolean isExternalStorageReadable() {
         String state = Environment.getExternalStorageState();
-        if ((Environment.MEDIA_MOUNTED.equals(state))
-                || (Environment.MEDIA_MOUNTED_READ_ONLY.equals(state))) {
+        if ((Environment.MEDIA_MOUNTED.equals(state)) || (Environment.MEDIA_MOUNTED_READ_ONLY.equals(state))) {
             return true;
         }
         return false;
@@ -262,13 +227,14 @@ public class MainActivity extends BaseActivity
 
     @Override
     public void retryDownload() {
-        if (isProblemWhenDownloading) {
-            Log.d("Luan", "download again");
 
-            new DownloadMusic().execute(mMusicLinkEditText.getText().toString().trim());
-        } else {
-            Log.d("Luan", "do not download again");
-        }
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                new DownloadMusic().execute(mMusicLinkEditText.getText().toString().trim());
+            }
+        });
+
     }
 
     class DownloadMusic extends AsyncTask<String, Integer, Void> {
@@ -284,7 +250,7 @@ public class MainActivity extends BaseActivity
 
                 File file;
                 FileOutputStream outputStream;
-                file = new File(Environment.getExternalStorageDirectory(), "song" + mMusicList.size() + ".mp3");
+                file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "song" + mMusicList.size() + ".mp3");
                 mMusicList.add(file.getName());
 
                 Log.d("Luan", Environment.getExternalStorageDirectory().getAbsolutePath());
@@ -300,6 +266,8 @@ public class MainActivity extends BaseActivity
                     total += count;
                     publishProgress((int) (total * 100 / lenghtOfFile));
                 }
+
+                httpURLConnection.disconnect();
 
                 outputStream.flush();
                 outputStream.close();
@@ -347,9 +315,11 @@ public class MainActivity extends BaseActivity
 
             if (!isNetworkAvailable()) {
                 Log.d("Luan", "network error");
-//                isProblemWhenDownloading = true;
+                setListener(MainActivity.this);
+                cancel(true);
                 alertDialog.dismiss();
             } else {
+                setListener(null);
                 Log.d("Luan", "network okay");
             }
             progressBar.setMax(100);
